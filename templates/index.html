@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>GL.iNet 自动化运维终端</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body { background-color: #f4f7fa; font-size: 0.88rem; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .nav-pills .nav-link { color: #555; }
+        .nav-pills .nav-link.active { background-color: #0d6efd; }
+        .source-ip { color: #d63384; font-family: monospace; font-weight: bold; }
+        .masked-input { background-color: #f8f9fa !important; color: #adb5bd; }
+        .mac-addr { font-family: monospace; font-size: 0.78rem; background: #e9ecef; padding: 2px 4px; border-radius: 4px; }
+        .target-ip { font-family: 'Consolas', monospace; font-size: 0.85rem; font-weight: bold; color: #0d6efd; }
+        .btn-xs { padding: 2px 6px; font-size: 0.75rem; }
+        .hostname-text { font-size: 0.8rem; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row mb-4 align-items-center">
+            <div class="col-md-8">
+                <h5 class="mb-0 text-dark"><i class="bi bi-cpu-fill text-primary me-2"></i>PVE远程桌面自动规则面板</h5>
+            </div>
+            <div class="col-md-4 text-end">
+                <button onclick="location.reload()" class="btn btn-sm btn-primary shadow-sm"><i class="bi bi-arrow-repeat"></i> 刷新数据</button>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white border-0 pt-3 text-center">
+                        <ul class="nav nav-pills nav-fill bg-light p-1 rounded-pill" role="tablist">
+                            <li class="nav-item"><button class="nav-link active rounded-pill" id="t-conn" data-bs-toggle="tab" data-bs-target="#conn-tab">连接信息</button></li>
+                            <li class="nav-item"><button class="nav-link rounded-pill" id="t-add" data-bs-toggle="tab" data-bs-target="#add-tab">新建RDP</button></li>
+                        </ul>
+                    </div>
+                    <div class="card-body tab-content">
+                        <div class="tab-pane fade show active" id="conn-tab">
+                            <form id="cf">
+                                <div class="mb-2"><label class="small fw-bold">路由器 IP (WAN)</label><input type="text" name="host" class="form-control form-control-sm {% if config.host %}masked-input{% endif %}" value="{{ config.host }}"></div>
+                                <div class="mb-2"><label class="small fw-bold">SSH 端口</label><input type="text" name="port" class="form-control form-control-sm {% if config.port %}masked-input{% endif %}" value="{{ config.port }}" ></div>
+                                <div class="mb-2"><label class="small fw-bold">用户名</label><input type="text" name="user" class="form-control form-control-sm {% if config.user %}masked-input{% endif %}" value="{{ config.user }}"></div>
+                                <div class="mb-3"><label class="small fw-bold">密码</label><input type="password" name="pass" class="form-control form-control-sm {% if config.pass %}masked-input{% endif %}" value="{{ config.pass }}"></div>
+                                <button type="submit" class="btn btn-dark btn-sm w-100 py-2">保存设置并持久化</button>
+                            </form>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="add-tab">
+                            <form id="rf">
+                                <div class="mb-2"><label class="small fw-bold text-muted">主机名称</label><input type="text" name="hostname" id="f_hostname" class="form-control form-control-sm"></div>
+                                <div class="mb-2"><label class="small fw-bold">规则名</label><input type="text" name="name" id="f_name" class="form-control form-control-sm" required></div>
+                                <div class="mb-2"><label class="small fw-bold">MAC 地址</label><input type="text" name="mac" id="f_mac" class="form-control form-control-sm" required></div>
+                                <div class="mb-2"><label class="small fw-bold">内网 IP</label><input type="text" name="int_ip" id="f_int_ip" class="form-control form-control-sm" value="192.168.128." required></div>
+                                <div class="mb-2"><label class="small fw-bold">来源限制</label><input type="text" name="wan_ip" id="f_wan_ip" class="form-control form-control-sm" placeholder="留空为不限"></div>
+                                
+                                <div class="mb-2">
+                                    <label class="small fw-bold">内网目标端口</label>
+                                    <div class="input-group input-group-sm">
+                                        <select class="form-select" style="max-width: 110px;" onchange="document.getElementById('f_int_port').value=this.value">
+                                            <option value="">手动填</option>
+                                            <option value="3389">3389</option>
+                                            <option value="22">22</option>
+                                            <option value="80">80</option>
+                                            <option value="443">443</option>
+                                            <option value="8006">8006</option>
+                                        </select>
+                                        <input type="text" name="int_port" id="f_int_port" class="form-control" value="3389" required>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="small fw-bold">外部映射端口</label>
+                                    <div class="input-group input-group-sm">
+                                        <select class="form-select" style="max-width: 110px;" onchange="document.getElementById('f_ext_port').value=this.value">
+                                            <option value="">手动填</option>
+                                            <option value="6666">6666</option>
+                                            <option value="6667">6667</option>
+                                            <option value="6668">6668</option>
+                                        </select>
+                                        <input type="text" name="ext_port" id="f_ext_port" class="form-control" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm w-100 py-2 mb-2">应用规则并重启防火墙</button>
+                                <div class="row g-2">
+                                    <div class="col-6"><button type="button" class="btn btn-success btn-sm w-100 py-2" onclick="submitPartial('dhcp')">设置静态DHCP</button></div>
+                                    <div class="col-6"><button type="button" class="btn btn-info btn-sm w-100 py-2 text-white" onclick="submitPartial('fw')">设置转发规则</button></div>
+                                </div>
+                            </form>
+                        </div>
+                        <div id="sm" class="mt-3 text-center small fw-bold"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card h-100 overflow-hidden">
+                    <ul class="nav nav-tabs px-3 pt-2 bg-light border-0 justify-content-center" role="tablist">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#l-rdp">RDP 专用 (6666-6668)</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#l-other">其他转发</button></li>
+                    </ul>
+                    <div class="tab-content bg-white text-start">
+                        <div class="tab-pane fade show active" id="l-rdp">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light small"><tr><th class="ps-3">规则 / 主机</th><th>来源 IP</th><th>映射</th><th>目标信息</th><th>操作</th></tr></thead>
+                                <tbody>
+                                    {% for r in rdp_rules %}
+                                    <tr>
+                                        <td class="ps-3">
+                                            <strong>{{ r.name }}</strong><br>
+                                            <span class="hostname-text">
+                                                {% if r.hostname and r.hostname != 'none' and r.hostname != '' %}{{ r.hostname }}{% else %}无解析{% endif %}
+                                            </span>
+                                        </td>
+                                        <td><span class="source-ip">{{ r.src_ip_display }}</span></td>
+                                        <td><span class="badge bg-info text-dark">{{ r.src_dport }}</span> <i class="bi bi-arrow-right text-muted mx-1"></i> <span class="badge bg-primary">{{ r.dest_port }}</span></td>
+                                        <td>
+                                            <span class="target-ip">{{ r.dest_ip }}</span><br>
+                                            <span class="mac-addr my-1 d-inline-block">{{ r.mac }}</span><br>
+                                            <span class="badge {% if r.ip_type=='静态' %}bg-success{% else %}bg-secondary{% endif %} btn-xs">{{ r.ip_type }}</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-xs btn-outline-warning" onclick="editRule('{{r.hostname}}','{{r.name}}','{{r.mac}}','{{r.dest_ip}}','{{r.src_ip_display}}','{{r.src_dport}}','{{r.dest_port}}')">修改</button>
+                                            <button class="btn btn-xs btn-outline-danger ms-1" onclick="delRule('{{r.index}}','{{r.mac_id}}')">删除</button>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="5" class="text-center py-5 text-muted">暂无 RDP 规则</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="tab-pane fade" id="l-other">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light small"><tr><th class="ps-3">规则 / 主机</th><th>来源 IP</th><th>映射</th><th>目标信息</th><th>操作</th></tr></thead>
+                                <tbody>
+                                    {% for r in other_rules %}
+                                    <tr>
+                                        <td class="ps-3">
+                                            <strong>{{ r.name }}</strong><br>
+                                            <span class="hostname-text">
+                                                {% if r.hostname and r.hostname != 'none' and r.hostname != '' %}{{ r.hostname }}{% else %}无解析{% endif %}
+                                            </span>
+                                        </td>
+                                        <td><span class="source-ip">{{ r.src_ip_display }}</span></td>
+                                        <td><span class="badge bg-info text-dark">{{ r.src_dport }}</span> <i class="bi bi-arrow-right text-muted mx-1"></i> <span class="badge bg-primary">{{ r.dest_port }}</span></td>
+                                        <td>
+                                            <span class="target-ip">{{ r.dest_ip }}</span><br>
+                                            <span class="mac-addr my-1 d-inline-block">{{ r.mac }}</span><br>
+                                            <span class="badge {% if r.ip_type=='静态' %}bg-success{% else %}bg-secondary{% endif %} btn-xs">{{ r.ip_type }}</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-xs btn-outline-warning" onclick="editRule('{{r.hostname}}','{{r.name}}','{{r.mac}}','{{r.dest_ip}}','{{r.src_ip_display}}','{{r.src_dport}}','{{r.dest_port}}')">修改</button>
+                                            <button class="btn btn-xs btn-outline-danger ms-1" onclick="delRule('{{r.index}}','{{r.mac_id}}')">删除</button>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="5" class="text-center py-5 text-muted">暂无其他转发规则</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const log = (t, c) => { document.getElementById('sm').innerHTML = `<span class="text-${c}">${t}</span>`; };
+        
+        function editRule(h, n, m, ip, wan, ext_p, int_p) {
+            new bootstrap.Tab(document.getElementById('t-add')).show();
+            document.getElementById('f_hostname').value = (h==='none' || h==='无解析' ? '' : h);
+            document.getElementById('f_name').value = n;
+            document.getElementById('f_mac').value = m;
+            document.getElementById('f_int_ip').value = ip;
+            document.getElementById('f_wan_ip').value = (wan==='不限'?'':wan);
+            document.getElementById('f_ext_port').value = ext_p;
+            document.getElementById('f_int_port').value = int_p;
+        }
+
+        async function delRule(idx, mid) {
+            if(!confirm('确定要删除该规则及其静态绑定吗？')) return;
+            log('正在执行删除操作...', 'muted');
+            try {
+                const res = await fetch('/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fw_idx:idx, mac_id:mid})});
+                const d = await res.json();
+                log(d.msg, 'success'); setTimeout(() => location.reload(), 1000);
+            } catch (err) { log('操作失败', 'danger'); }
+        }
+
+        async function submitPartial(type) {
+            const form = document.getElementById('rf');
+            const data = Object.fromEntries(new FormData(form).entries());
+            const macReg = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+            const ipReg = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
+            if (type === 'dhcp') {
+                if (!macReg.test(data.mac.trim())) return log('错误：MAC地址格式不正确', 'danger');
+                if (!ipReg.test(data.int_ip.trim())) return log('错误：内网IP格式不正确', 'danger');
+            } else if (type === 'fw') {
+                if (!data.name.trim()) return log('错误：规则名称不能为空', 'danger');
+                if (!ipReg.test(data.int_ip.trim())) return log('错误：内网IP格式不正确', 'danger');
+                if (!data.ext_port.trim() || !data.int_port.trim()) return log('错误：端口不能为空', 'danger');
+            }
+            log('指令下发中...', 'muted');
+            try {
+                const url = type === 'dhcp' ? '/set_dhcp' : '/set_fw';
+                const res = await fetch(url, {method:'POST', body:new FormData(form)});
+                const d = await res.json();
+                log(d.msg, 'success'); setTimeout(() => location.reload(), 1500);
+            } catch (err) { log('请求失败', 'danger'); }
+        }
+
+        document.getElementById('rf').onsubmit = async (e) => {
+            e.preventDefault();
+            log('全量配置同步中...', 'muted');
+            await fetch('/apply', {method:'POST', body:new FormData(e.target)});
+            setTimeout(() => location.reload(), 1500);
+        };
+
+        document.getElementById('cf').onsubmit = async (e) => {
+            e.preventDefault();
+            await fetch('/update_config', {method:'POST', body:new FormData(e.target)});
+            log('连接信息已保存', 'success'); setTimeout(() => location.reload(), 800);
+        };
+    </script>
+</body>
+</html>

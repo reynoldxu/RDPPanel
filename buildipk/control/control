@@ -1,0 +1,8 @@
+Package: luci-app-rdp-manager
+Version: 1.0.0-1
+Architecture: all
+Maintainer: reynoldxu <reynoldxu@gmail.com>
+Section: luci
+Description: LuCI Support for （RDP） Port Forwarding and Static DHCP settings
+
+

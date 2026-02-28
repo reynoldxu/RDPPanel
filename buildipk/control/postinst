@@ -1,0 +1,5 @@
+#!/bin/sh
+# 清理 LuCI 缓存让菜单立刻生效
+rm -rf /tmp/luci-indexcache
+rm -rf /tmp/luci-modulecache/*
+exit 0
