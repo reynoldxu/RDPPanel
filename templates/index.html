@@ -55,7 +55,19 @@
                                 <div class="mb-2"><label class="small fw-bold text-muted">主机名称</label><input type="text" name="hostname" id="f_hostname" class="form-control form-control-sm"></div>
                                 <div class="mb-2"><label class="small fw-bold">规则名</label><input type="text" name="name" id="f_name" class="form-control form-control-sm" required></div>
                                 <div class="mb-2"><label class="small fw-bold">MAC 地址</label><input type="text" name="mac" id="f_mac" class="form-control form-control-sm" required></div>
-                                <div class="mb-2"><label class="small fw-bold">内网 IP</label><input type="text" name="int_ip" id="f_int_ip" class="form-control form-control-sm" value="192.168.128." required></div>
+                                
+                                <div class="mb-2">
+                                    <label class="small fw-bold">内网 IP</label>
+                                    <div class="input-group input-group-sm">
+                                        <select class="form-select text-truncate" style="max-width: 120px;" onchange="autoFillHost(this)">
+                                            <option value="">快速选择</option>
+                                            {% for h in all_hosts %}
+                                            <option value="{{ h.ip }}" data-mac="{{ h.mac }}" data-hostname="{{ h.hostname }}">{{ h.ip }} ({{ h.hostname or '未知' }})</option>
+                                            {% endfor %}
+                                        </select>
+                                        <input type="text" name="int_ip" id="f_int_ip" class="form-control" value="192.168.128." required>
+                                    </div>
+                                </div>
                                 <div class="mb-2"><label class="small fw-bold">来源限制</label><input type="text" name="wan_ip" id="f_wan_ip" class="form-control form-control-sm" placeholder="留空为不限"></div>
                                 
                                 <div class="mb-2">
@@ -170,6 +182,19 @@
         </div>
     </div>
     <script>
+        // === [新增] 处理下拉框选择自动填充主机名和MAC地址 ===
+        function autoFillHost(sel) {
+            if (!sel.value) return;
+            document.getElementById('f_int_ip').value = sel.value;
+            const opt = sel.options[sel.selectedIndex];
+            document.getElementById('f_mac').value = opt.dataset.mac || '';
+            const hname = opt.dataset.hostname;
+            document.getElementById('f_hostname').value = (hname === 'none' || hname === '*') ? '' : (hname || '');
+            // 选完之后重置为默认提示项，方便下次触发 onchange
+            sel.value = ""; 
+        }
+        // ======================================================
+
         const log = (t, c) => { document.getElementById('sm').innerHTML = `<span class="text-${c}">${t}</span>`; };
         
         function editRule(h, n, m, ip, wan, ext_p, int_p) {

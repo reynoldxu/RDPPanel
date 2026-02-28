@@ -77,6 +77,18 @@ def parse_full_data(fw_raw, dhcp_raw, leases_raw):
             if len(parts) >= 4 and i_addr not in host_map and parts[3] != '*':
                 host_map[i_addr] = parts[3]
 
+    # === [新增代码] 提取所有已知的主机信息并按 IP 排序 ===
+    all_hosts = []
+    for ip, mac in mac_map.items():
+        all_hosts.append({
+            'ip': ip,
+            'mac': mac,
+            'hostname': host_map.get(ip, '')
+        })
+    # 按照 IP 地址进行逻辑排序
+    all_hosts.sort(key=lambda x: [int(p) if p.isdigit() else p for p in x['ip'].split('.')])
+    # ====================================================
+
     rules_dict = {}
     fw_pattern = re.compile(r"firewall\.@redirect\[(\d+)\]\.(\w+)='(.*?)'")
     for line in fw_raw.splitlines():
@@ -103,7 +115,9 @@ def parse_full_data(fw_raw, dhcp_raw, leases_raw):
                 rdp_rules.append(rule)
             else:
                 other_rules.append(rule)
-    return rdp_rules, other_rules
+    
+    # === [修改] 将 all_hosts 也返回 ===
+    return rdp_rules, other_rules, all_hosts
 
 
 @app.route('/')
@@ -113,7 +127,8 @@ def index():
                    "user": "******" if cfg.get("user") else "", "pass": "******" if cfg.get("pass") else "",
                    "has_config": bool(cfg.get("host"))}
     raw_out, _ = ssh_exec()
-    rdp, other = [], []
+    # === [修改] 接收 all_hosts 变量 ===
+    rdp, other, all_hosts = [], [], []
     if raw_out:
         parts = raw_out.split('===DHCP_START===')
         fw_segment = parts[0]
@@ -122,8 +137,9 @@ def index():
             sub_parts = parts[1].split('===LEASES_START===')
             dhcp_segment = sub_parts[0]
             if len(sub_parts) > 1: leases_segment = sub_parts[1]
-        rdp, other = parse_full_data(fw_segment, dhcp_segment, leases_segment)
-    return render_template('index.html', rdp_rules=rdp, other_rules=other, config=display_cfg)
+        rdp, other, all_hosts = parse_full_data(fw_segment, dhcp_segment, leases_segment)
+    # === [修改] 将 all_hosts 渲染到模板 ===
+    return render_template('index.html', rdp_rules=rdp, other_rules=other, config=display_cfg, all_hosts=all_hosts)
 
 
 @app.route('/update_config', methods=['POST'])
@@ -229,4 +245,3 @@ if __name__ == '__main__':
 
     print(">>> 服务已启动，请访问: http://127.0.0.1:30000")
     serve(app, host='127.0.0.1', port=30000)
-
