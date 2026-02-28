@@ -31,20 +31,28 @@
                 </div>
                 <div class="cbi-value">
                     <label class="cbi-value-title">内网 IP</label>
-                    <div class="cbi-value-field"><input type="text" class="cbi-input-text" id="f_int_ip" name="int_ip" value="192.168.128." required></div>
+                    <div class="cbi-value-field">
+                        <select class="cbi-input-select" id="sel_int_ip" style="width:180px; margin-right:5px;" onchange="autoFillHost(this.value)">
+                            <option value="">手动填入或选择...</option>
+                            <% if known_hosts then for _, h in ipairs(known_hosts) do %>
+                            <option value="<%=h.ip%>"><%=h.ip%> (<%=h.name ~= "" and h.name or h.mac%>)</option>
+                            <% end end %>
+                        </select>
+                        <input type="text" class="cbi-input-text" id="f_int_ip" name="int_ip" style="width:120px;" value="192.168.128." required>
+                    </div>
                 </div>
                 <div class="cbi-value">
                     <label class="cbi-value-title">内网目标端口</label>
                     <div class="cbi-value-field">
                         <select class="cbi-input-select" style="width:120px; margin-right:5px;" onchange="document.getElementById('f_int_port').value=this.value">
-                            <option value="">手动填入</option>
+                            <option value="">手动填入或选择</option>
                             <option value="3389">3389 (RDP)</option>
                             <option value="22">22 (SSH)</option>
                             <option value="80">80 (HTTP)</option>
                             <option value="443">443 (HTTPS)</option>
                             <option value="8006">8006 (PVE)</option>
                         </select>
-                        <input type="text" class="cbi-input-text" id="f_int_port" name="int_port" style="width:100px;" value="3389" required>
+                        <input type="text" class="cbi-input-text" id="f_int_port" name="int_port" style="width:100px;" value="" required>
                     </div>
                 </div>
                 <div class="cbi-value">
@@ -55,7 +63,7 @@
                     <label class="cbi-value-title">外部映射端口</label>
                     <div class="cbi-value-field">
                         <select class="cbi-input-select" style="width:120px; margin-right:5px;" onchange="document.getElementById('f_ext_port').value=this.value">
-                            <option value="">手动填入</option>
+                            <option value="">手动填入或选择</option>
                             <option value="6666">6666 (RDP)</option>
                             <option value="6667">6667 (RDP)</option>
                             <option value="6668">6668 (RDP)</option>
@@ -161,7 +169,24 @@
     var msg_box = document.getElementById('sys_msg');
     var log = function(txt) { msg_box.innerText = txt; };
 
-    // editR 新增了 dp (内网端口) 参数
+    // 将 Lua 的 known_hosts 渲染为 JS 字典方便快速索引查询
+    var knownHostsMap = {
+    <% if known_hosts then for _, h in ipairs(known_hosts) do %>
+        "<%=h.ip%>": { mac: "<%=h.mac%>", name: "<%=h.name%>" },
+    <% end end %>
+    };
+
+    // 监听下拉框改变，自动填入关联的输入框
+    window.autoFillHost = function(ip) {
+        if (ip !== "") {
+            document.getElementById('f_int_ip').value = ip;
+            if (knownHostsMap[ip]) {
+                document.getElementById('f_mac').value = knownHostsMap[ip].mac;
+                document.getElementById('f_hostname').value = knownHostsMap[ip].name;
+            }
+        }
+    };
+
     window.editR = function(h, n, m, ip, w, p, dp) {
         document.getElementById('f_hostname').value = (h === '无解析' ? '' : h);
         document.getElementById('f_name').value = n;
@@ -169,7 +194,11 @@
         document.getElementById('f_int_ip').value = ip;
         document.getElementById('f_wan_ip').value = (w === '不限' ? '' : w);
         document.getElementById('f_ext_port').value = p;
-        document.getElementById('f_int_port').value = dp; // 渲染内网端口
+        document.getElementById('f_int_port').value = dp;
+        
+        // 当点击修改时，若有匹配的 IP 也同步选中下拉框
+        document.getElementById('sel_int_ip').value = knownHostsMap[ip] ? ip : "";
+        
         window.scrollTo(0, 0); 
     };
 
@@ -190,7 +219,6 @@
         var form = document.getElementById('rdp_form');
         var data = new FormData(form);
         
-        // 增加内网端口非空校验
         if(type === 'fw' || type === 'apply') {
             if(!data.get('name') || !data.get('ext_port') || !data.get('int_port')) {
                 log('错误：规则名、内网端口和外部映射端口均为必填项！'); return;

@@ -27,4 +27,6 @@ tar -czf "$IPK_NAME" debian-binary control.tar.gz data.tar.gz
 # 清理
 rm -f debian-binary control.tar.gz data.tar.gz
 
-echo ">>> 打包完成: $IPK_NAME"
+opkg install luci-app-rdp-manager_1.0.0-1_all.ipk --force-reinstall
+
+echo ">>> 打包安装完成: $IPK_NAME"

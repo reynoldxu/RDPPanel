@@ -8,6 +8,15 @@ function index()
     entry({"admin", "network", "rdp_manager", "apply"}, call("action_apply")).leaf = true
 end
 
+-- 辅助函数：用于对 IP 数组进行规范排序
+local function ip2num(ip)
+    local a, b, c, d = ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+    if a and b and c and d then
+        return a * 16777216 + b * 65536 + c * 256 + d
+    end
+    return 0
+end
+
 function action_index()
     local uci = require "luci.model.uci".cursor()
     local mac_map, host_map, static_ips = {}, {}, {}
@@ -37,6 +46,17 @@ function action_index()
         end
         f:close()
     end
+
+    -- 汇总所有已知主机（融合静态 DHCP 和动态分配）
+    local known_hosts = {}
+    for ip, mac in pairs(mac_map) do
+        table.insert(known_hosts, {
+            ip = ip,
+            mac = mac,
+            name = host_map[ip] or ""
+        })
+    end
+    table.sort(known_hosts, function(a, b) return ip2num(a.ip) < ip2num(b.ip) end)
 
     local rdp_rules, other_rules = {}, {}
 
@@ -70,7 +90,8 @@ function action_index()
 
     luci.template.render("rdp_manager/index", {
         rdp_rules = rdp_rules, 
-        other_rules = other_rules
+        other_rules = other_rules,
+        known_hosts = known_hosts -- 将主机信息传给前端
     })
 end
 
@@ -107,6 +128,8 @@ function action_set_dhcp()
     end
 end
 
+-- ... 前面代码保持不变 ...
+
 function action_set_fw()
     local uci = require "luci.model.uci".cursor()
     local name = luci.http.formvalue("name")
@@ -114,13 +137,18 @@ function action_set_fw()
     local ip = luci.http.formvalue("int_ip")
     local wan = luci.http.formvalue("wan_ip")
     local dest_port = luci.http.formvalue("int_port")
-    if not dest_port or dest_port == "" then dest_port = "3389" end -- 增加内网端口容错
+    -- 移除 if not dest_port ... 3389 行，完全依赖前端传值
 
     if name and name ~= "" and port and ip then
         uci:foreach("firewall", "redirect", function(s)
             if s.name == name then uci:delete("firewall", s['.name']) end
         end)
-        local r = { name=name, src="wan", dest="lan", src_dport=port, dest_ip=ip, dest_port=dest_port, target="DNAT" }
+        -- 如果 dest_port 为空，则不写入该字段或由系统处理
+        local r = { 
+            name=name, src="wan", dest="lan", 
+            src_dport=port, dest_ip=ip, 
+            dest_port=dest_port, target="DNAT" 
+        }
         if wan and wan ~= "" then r.src_ip = wan end
         uci:section("firewall", "redirect", nil, r)
         uci:commit("firewall"); os.execute("/etc/init.d/firewall restart >/dev/null 2>&1")
@@ -137,7 +165,7 @@ function action_apply()
     local port = luci.http.formvalue("ext_port")
     local wan = luci.http.formvalue("wan_ip")
     local dest_port = luci.http.formvalue("int_port")
-    if not dest_port or dest_port == "" then dest_port = "3389" end -- 增加内网端口容错
+    -- 移除 if not dest_port ... 3389 行
     
     if mac and mac ~= "" and ip and ip ~= "" then
         local id = string.gsub(string.lower(mac), "[%-:]", "")
@@ -150,7 +178,11 @@ function action_apply()
         uci:foreach("firewall", "redirect", function(s)
             if s.name == fw_name then uci:delete("firewall", s['.name']) end
         end)
-        local r = { name=fw_name, src="wan", dest="lan", src_dport=port, dest_ip=ip, dest_port=dest_port, target="DNAT" }
+        local r = { 
+            name=fw_name, src="wan", dest="lan", 
+            src_dport=port, dest_ip=ip, 
+            dest_port=dest_port, target="DNAT" 
+        }
         if wan and wan ~= "" then r.src_ip = wan end
         uci:section("firewall", "redirect", nil, r)
         uci:commit("firewall")
